@@ -136,7 +136,7 @@ for base_q_value in base_q_values:
         optimal_action_subplot.plot(x_range_list,optimal_action_vector)
 
         #write results to csv, in case needed later
-        results.write((','.join(map(str,reward_vector.tolist())))+'\n')
+        results.write(','.join(map(str,reward_vector.tolist()))+'\n')
         results.write((','.join(map(str,reward_vector.tolist())))+'\n')
 
 reward_subplot.set_title('Average rewards over {0} runs'.format(max_runs))

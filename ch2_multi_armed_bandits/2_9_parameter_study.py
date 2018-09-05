@@ -1,10 +1,12 @@
-import random as rnd
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.random as rnd
+import time
+import sys
 
 def walk_q_values(q_values, random_walk_mu=0.0,random_walk_sig=0.01):
     for index, value in enumerate(q_values):
-        walk_amount = rnd.gauss(random_walk_mu, random_walk_sig)
+        walk_amount = rnd.normal(random_walk_mu, random_walk_sig)
         q_values[index] += walk_amount
 
 def select_action_e_greedy(q_estimates, epsilon):
@@ -23,7 +25,7 @@ def select_action_gradient_bandit(action_preferences):
     #softmax over the action_preferences
     action_probabilities = np.exp(action_preferences)/np.sum(np.exp(action_preferences),axis=0)
 
-    return action_probabilities.argmax()
+    return np.random.choice(list(range(0,len(action_preferences))),p=action_probabilities)
 
 def select_action_ucb(q_estimates, exploration_constant, action_select_count, curr_time_step):
 
@@ -54,12 +56,26 @@ def update_preferences(action_preferences, action, reward, reward_baseline, lear
     for non_selected_action in non_selected_actions:
         action_preferences[non_selected_action] = action_preferences[non_selected_action] - learning_rate*(reward-reward_baseline)*action_probabilities[action]
 
+def generate_param_range(start, end, base=2):
+    param_list = []
+    next_entry = start
+
+    while next_entry<=end:
+        param_list.append(next_entry)
+        next_entry = next_entry*base
+
+    return param_list
+
+
 def train_agent(run_type,parameter_range,total_steps,threshold_to_count_results):
 
-    curr_step = 0
     results = []
 
+    seed = rnd.randint(sys.maxsize)
+
+    action_chain = []
     for parameter in parameter_range:
+        rnd.seed(seed)
         result = 0.0
         reward_baseline_gradient_bandit = 0.0
 
@@ -74,6 +90,12 @@ def train_agent(run_type,parameter_range,total_steps,threshold_to_count_results)
 
         #count for number of times action has been selected
         action_select_count = np.full((10),0)
+
+        curr_step = 0
+
+        old_action_chain = action_chain
+        action_chain = []
+
 
         while curr_step<total_steps:
 
@@ -92,6 +114,7 @@ def train_agent(run_type,parameter_range,total_steps,threshold_to_count_results)
                 action = select_action_greedy(selection_values)
 
             reward = q_values[action]
+            action_chain.append(action)
 
             if curr_step>=threshold_to_count_results:
                 result = (result*curr_step + reward)/(curr_step+1)
@@ -106,6 +129,10 @@ def train_agent(run_type,parameter_range,total_steps,threshold_to_count_results)
                 update_estimates(selection_values, action, reward)
 
             curr_step += 1
+
+        if action_chain == old_action_chain:
+            print('you took the exact same actions this time')
+        print('and your selection_vals were: ', ','.join(map(str,selection_values.tolist())))
 
         results.append(result)
 
@@ -124,12 +151,14 @@ def plot(run_types,parameter_ranges,results):
     plt.xlabel(u'\u03B5'+','+u'\u03B1'+',c,Q'+u'\u2080')
     plt.ylabel('Average reward of last {0} steps'.format(threshold_to_count_results))
 
+    plt.savefig('2_9_parameter_study.png')
     plt.show()
+
 
 if __name__ == "__main__":
 
     total_steps = 200000
-    threshold_to_count_results = 100000
+    threshold_to_count_results = 100000#100000
 
     run_types = [
         'constant_step_e_greedy',
@@ -140,19 +169,21 @@ if __name__ == "__main__":
 
     parameter_ranges = {
         #varying eps
-        'constant_step_e_greedy': [1/128,1/64,1/32,1/16,1/4],
+        'constant_step_e_greedy': generate_param_range(1/128,1/4,2),
         #varying alpha
-        'gradient_bandit': [1/32,1/16,1/8,1/4,1/2,1,2],
+        'gradient_bandit': generate_param_range(1/32,2,2),
         #varying c
-        'upper_confidence_bound': [1/16,1/8,1/4,1/2,1,2,4],
+        'upper_confidence_bound': generate_param_range(1/16,4,2),
         #varying initial q vals
-        'greedy_optimistic_initialization': [1/4,1/2,1,2,4]
+        'greedy_optimistic_initialization': generate_param_range(1/4,4,2)
     }
 
     results = {}
 
     for run_type in run_types:
         print('collecting results for: ' +run_type)
+        start_time = time.time()
         results[run_type] = train_agent(run_type,parameter_ranges[run_type],total_steps,threshold_to_count_results)
+        print("--- %.6s seconds for %s ---" % (time.time()-start_time,run_type))
 
     plot(run_types,parameter_ranges,results)
